@@ -1,3 +1,6 @@
+// Exemplo de tela Home para navegação por abas
+// (Conteúdo real da HomeScreen permanece, mas pode ser adaptado para navegação por abas)
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
@@ -10,14 +13,14 @@ import '../widgets/custom_button.dart';
 import '../providers/friend_provider.dart';
 
 /// Tela principal do app após login/autenticação.
-class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({Key? key}) : super(key: key);
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({Key? key}) : super(key: key);
 
   @override
-  State<DashboardScreen> createState() => _DashboardScreenState();
+  State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+class _HomeScreenState extends State<HomeScreen> {
   bool _isLoading = true;
   UserModel? _user;
   String? _error;
@@ -114,7 +117,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     // Scaffold com AppBar e Drawer para navegação
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Dashboard'),
+        title: const Text('Home'),
       ),
       drawer: Drawer(
         child: ListView(
@@ -249,6 +252,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 ? CircleAvatar(backgroundImage: NetworkImage(user.avatarUrl!))
                                 : const CircleAvatar(child: Icon(Icons.person)),
                             title: Text(user.name),
+                            subtitle: Text(user.email),
                             trailing: friendProvider.isLoading
                                 ? const SizedBox(
                                     width: 24,

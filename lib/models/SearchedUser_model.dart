@@ -1,7 +1,7 @@
 /// Modelo de dados do usuário retornado pelo endpoint /search-users da API AWS.
 /// Representa um perfil de usuário buscado no sistema.
 
-class UserModel {
+class SearchedUserModel {
   /// Identificador único do usuário.
   final String id;
   /// Nome do usuário.
@@ -12,16 +12,16 @@ class UserModel {
   final String? avatarUrl;
 
   /// Construtor do modelo.
-  const UserModel({
+  const SearchedUserModel({
     required this.id,
     required this.name,
     required this.email,
     this.avatarUrl,
   });
 
-  /// Cria um objeto UserModel a partir de um Map (JSON).
-  factory UserModel.fromJson(Map<String, dynamic> json) {
-    return UserModel(
+  /// Cria um objeto SearchedUserModel a partir de um Map (JSON).
+  factory SearchedUserModel.fromJson(Map<String, dynamic> json) {
+    return SearchedUserModel(
       id: json['id'] as String,
       name: json['name'] as String,
       email: json['email'] as String? ?? '', // se não vier, deixa string vazia
@@ -29,7 +29,7 @@ class UserModel {
     );
   }
 
-  /// Converte o objeto UserModel em um Map (JSON).
+  /// Converte o objeto SearchedUserModel em um Map (JSON).
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -40,13 +40,13 @@ class UserModel {
   }
 
   /// Cria uma cópia do objeto com os campos modificados.
-  UserModel copyWith({
+  SearchedUserModel copyWith({
     String? id,
     String? name,
     String? email,
     String? avatarUrl,
   }) {
-    return UserModel(
+    return SearchedUserModel(
       id: id ?? this.id,
       name: name ?? this.name,
       email: email ?? this.email,
@@ -54,18 +54,18 @@ class UserModel {
     );
   }
 
-  /// Permite comparação entre objetos UserModel.
+  /// Permite comparação entre objetos SearchedUserModel.
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is UserModel &&
+      other is SearchedUserModel &&
           runtimeType == other.runtimeType &&
           id == other.id &&
           name == other.name &&
           email == other.email &&
           avatarUrl == other.avatarUrl;
 
-  /// Gera um hashCode consistente para UserModel.
+  /// Gera um hashCode consistente para SearchedUserModel.
   @override
   int get hashCode => Object.hash(id, name, email, avatarUrl);
 }

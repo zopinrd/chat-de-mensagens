@@ -4,6 +4,7 @@
 import 'package:amazon_cognito_identity_dart_2/cognito.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../cognito_config.dart';
+import 'auth_exception.dart';
 
 /// Implementação de armazenamento seguro usando Flutter Secure Storage.
 class SecureStorage extends CognitoStorage {
@@ -38,6 +39,8 @@ class AuthService {
   factory AuthService() => _instance;
   AuthService._internal();
 
+  static const int minJwtLength = 800;
+
   // Armazenamento seguro
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
   final SecureStorage _storage = SecureStorage(const FlutterSecureStorage());
@@ -51,19 +54,24 @@ class AuthService {
   CognitoUser? _cognitoUser;
   CognitoUserSession? _session;
 
+  // Gera username a partir do nome (sem espaços, minúsculo, sem caracteres especiais)
+  String _generateUsername(String name) {
+    return name.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+  }
+
   // =================== AUTENTICAÇÃO ===================
 
   /// Registra um novo usuário no Cognito, usando username baseado no nome (não pode ser e-mail).
+  /// Após o cadastro, o usuário pode logar em qualquer dispositivo/emulador.
   Future<bool> signUp({
     required String email,
     required String password,
     required String name,
   }) async {
     try {
-      // Gera username a partir do nome (sem espaços, minúsculo, sem caracteres especiais)
-      String username = name.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+      String username = _generateUsername(name);
       if (username.isEmpty) {
-        throw Exception('Nome inválido para gerar username.');
+        throw AuthException('Nome inválido para gerar username.');
       }
       final userAttributes = [
         AttributeArg(name: 'email', value: email),
@@ -71,9 +79,12 @@ class AuthService {
       ];
       await userPool.signUp(username, password, userAttributes: userAttributes);
       return true;
+    } on CognitoClientException catch (e) {
+      print('[AuthService] CognitoClientException: ${e.message}');
+      throw AuthException(e.message ?? 'Erro ao registrar usuário.');
     } catch (e) {
-      print('[AuthService] Erro ao registrar: $e');
-      rethrow;
+      print('[AuthService] Erro inesperado: $e');
+      throw AuthException('Erro ao registrar usuário.');
     }
   }
 
@@ -90,9 +101,26 @@ class AuthService {
     try {
       _session = await _cognitoUser!.authenticateUser(authDetails);
       await _persistSession(_session!);
+      // Loga o idToken completo após login
+      final idToken = _session!.idToken.jwtToken;
+      final idTokenPreview = idToken != null && idToken.length >= 30 ? idToken.substring(0, 30) : (idToken ?? 'null');
+      print('[AuthService] idToken JWT COMPLETO APÓS LOGIN:[32m$idTokenPreview... (${idToken?.length ?? 0} chars)\u001b[0m');
+      // Compara token salvo no storage com o recebido do Cognito
+      final tokenStorage = await _secureStorage.read(key: 'idToken');
+      final tokenLogin = idToken;
+      final tokenLoginPreview = tokenLogin != null && tokenLogin.length >= 30 ? tokenLogin.substring(0, 30) : (tokenLogin ?? 'null');
+      final tokenStoragePreview = tokenStorage != null && tokenStorage.length >= 30 ? tokenStorage.substring(0, 30) : (tokenStorage ?? 'null');
+      print('[AuthService] Token do login (início): $tokenLoginPreview...');
+      print('[AuthService] Token do storage (início): $tokenStoragePreview...');
+      print('[AuthService] Tamanho login: ${tokenLogin?.length ?? 0}, tamanho storage: ${tokenStorage?.length ?? 0}');
+      print('[AuthService] Token login == storage? ${tokenLogin == tokenStorage}');
       return _session!;
+    } on CognitoClientException catch (e) {
+      print('[AuthService] CognitoClientException: ${e.message}');
+      throw AuthException(e.message ?? 'Erro ao autenticar usuário.');
     } catch (e) {
-      rethrow;
+      print('[AuthService] Erro inesperado: $e');
+      throw AuthException('Erro ao autenticar usuário.');
     }
   }
 
@@ -102,24 +130,28 @@ class AuthService {
       await _cognitoUser?.signOut();
     } finally {
       await _clearSession();
+      await _secureStorage.delete(key: 'idToken');
       _cognitoUser = null;
       _session = null;
     }
   }
 
   /// Confirma o registro do usuário com o código enviado por e-mail.
-  /// Usa o mesmo username gerado no signUp (não o e-mail).
+  /// Após confirmação, o usuário pode logar em qualquer dispositivo/emulador.
   Future<bool> confirmSignUp({
     required String name,
     required String confirmationCode,
   }) async {
-    // Gera o mesmo username a partir do nome
-    String username = name.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+    String username = _generateUsername(name);
     final user = CognitoUser(username, userPool, storage: _storage);
     try {
       return await user.confirmRegistration(confirmationCode);
+    } on CognitoClientException catch (e) {
+      print('[AuthService] CognitoClientException: ${e.message}');
+      throw AuthException(e.message ?? 'Erro ao confirmar registro.');
     } catch (e) {
-      rethrow;
+      print('[AuthService] Erro inesperado: $e');
+      throw AuthException('Erro ao confirmar registro.');
     }
   }
 
@@ -131,7 +163,7 @@ class AuthService {
     try {
       await user.forgotPassword();
     } catch (e) {
-      rethrow;
+      throw AuthException('Erro ao iniciar recuperação de senha.');
     }
   }
 
@@ -145,7 +177,7 @@ class AuthService {
     try {
       await user.confirmPassword(confirmationCode, newPassword);
     } catch (e) {
-      rethrow;
+      throw AuthException('Erro ao confirmar redefinição de senha.');
     }
   }
 
@@ -159,19 +191,13 @@ class AuthService {
     // Tenta restaurar sessão do armazenamento seguro
     final tokens = await _getPersistedTokens();
     if (tokens == null) return null;
-
-    _cognitoUser ??= CognitoUser(
-      tokens['email']!,
-      userPool,
-      storage: _storage,
-    );
-
+    _cognitoUser ??= CognitoUser(tokens['username']!, userPool, storage: _storage); // Corrigido para username
     _session = CognitoUserSession(
       CognitoIdToken(tokens['idToken']!),
       CognitoAccessToken(tokens['accessToken']!),
       refreshToken: CognitoRefreshToken(tokens['refreshToken']!),
     );
-
+    // Se expirado, tenta refresh
     if (!_session!.isValid()) {
       try {
         _session = await _cognitoUser!.refreshSession(_session!.refreshToken!);
@@ -181,18 +207,38 @@ class AuthService {
         return null;
       }
     }
-
+    // Validação básica do formato do JWT
+    if (_session!.idToken.jwtToken == null || _session!.idToken.jwtToken!.split('.').length != 3) {
+      throw AuthException('Formato inválido do idToken.');
+    }
     return _session;
+  }
+
+  /// Salva o idToken no FlutterSecureStorage de forma segura.
+  Future<void> saveIdToken(String token) async {
+    print('[AuthService] Salvando idToken no storage (saveIdToken), tamanho: ${token.length}');
+    if (token.length < minJwtLength) print('[AuthService] ALERTA: idToken muito curto ao salvar!');
+    await _secureStorage.write(key: 'idToken', value: token);
+  }
+
+  /// Retorna o idToken salvo no storage (ou null se não existir).
+  Future<String?> getIdTokenFromStorage() async {
+    final token = await _secureStorage.read(key: 'idToken');
+    print('[AuthService] Lendo idToken do storage, tamanho: ${token?.length ?? 0}');
+    if (token != null && token.length < minJwtLength) print('[AuthService] ALERTA: idToken muito curto ao ler do storage!');
+    return token;
   }
 
   // =================== UTILITÁRIOS PRIVADOS ===================
 
   /// Salva tokens de sessão de forma segura.
   Future<void> _persistSession(CognitoUserSession session) async {
-    await _secureStorage.write(key: 'idToken', value: session.idToken.jwtToken);
+    final idToken = session.idToken.jwtToken;
+    print('[AuthService] Salvando idToken no storage (_persistSession), tamanho: ${idToken?.length ?? 0}');
+    if ((idToken?.length ?? 0) < minJwtLength) print('[AuthService] ALERTA: idToken muito curto ao salvar!');
+    await _secureStorage.write(key: 'idToken', value: idToken);
     await _secureStorage.write(key: 'accessToken', value: session.accessToken.jwtToken);
     await _secureStorage.write(key: 'refreshToken', value: session.refreshToken?.token);
-    // Salva o username real usado no Cognito
     await _secureStorage.write(key: 'cognito_username', value: _cognitoUser?.username);
   }
 
@@ -207,7 +253,7 @@ class AuthService {
         'idToken': idToken,
         'accessToken': accessToken,
         'refreshToken': refreshToken,
-        'email': cognitoUsername,
+        'username': cognitoUsername, // Corrigido para username
       };
     }
     return null;
@@ -218,6 +264,6 @@ class AuthService {
     await _secureStorage.delete(key: 'idToken');
     await _secureStorage.delete(key: 'accessToken');
     await _secureStorage.delete(key: 'refreshToken');
-    await _secureStorage.delete(key: 'email');
+    await _secureStorage.delete(key: 'cognito_username');
   }
 }

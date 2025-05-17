@@ -6,9 +6,10 @@ import '../providers/auth_provider.dart';
 import '../widgets/loading_spinner.dart';
 import '../widgets/custom_input_field.dart';
 import '../widgets/custom_button.dart';
-import 'dashboard_screen.dart';
+import 'home_screen.dart';
 import 'forgot_password_screen.dart';
 import 'register_screen.dart';
+import 'home_screen.dart';
 
 /// Tela de Login do usuário, integrada ao AuthProvider.
 class LoginScreen extends StatefulWidget {
@@ -37,25 +38,14 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final email = _emailController.text.trim();
-    final storage = FlutterSecureStorage();
-    final username = await storage.read(key: 'username_for_$email');
-    if (username == null) {
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Usuário não encontrado. Faça o registro novamente.')),
-      );
-      return;
-    }
     final success = await authProvider.login(
-      username,
+      email, // Usa o e-mail diretamente como username
       _passwordController.text,
     );
     setState(() => _isLoading = false);
     if (success) {
-      // Navega para o dashboard após login bem-sucedido
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const DashboardScreen()),
-      );
+      // Navega para a home (com menu de navegação) após login bem-sucedido
+      Navigator.of(context).pushReplacementNamed('/home');
     } else {
       // Exibe mensagem de erro amigável
       final error = authProvider.errorMessage ?? 'Erro desconhecido ao fazer login.';

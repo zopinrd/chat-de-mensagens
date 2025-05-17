@@ -6,12 +6,14 @@ import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/forgot_password_screen.dart';
 import 'screens/reset_password_screen.dart';
-import 'screens/dashboard_screen.dart';
+import 'screens/home_screen.dart';
+import 'screens/main_navigation_screen.dart';
+import 'screens/chat_screen.dart';
 import 'cognito_config.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Inicialize o CognitoConfig lendo do .env
+  // Inicializa variáveis de ambiente e Cognito
   await CognitoConfig.initialize();
   runApp(const AppRoot());
 }
@@ -22,7 +24,6 @@ class AppRoot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // MultiProvider para gerenciamento global de estado
     return AppProviders(
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -31,7 +32,6 @@ class AppRoot extends StatelessWidget {
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
           useMaterial3: true,
         ),
-        // Definição das rotas nomeadas principais
         initialRoute: '/',
         routes: {
           '/': (context) => const _RootRedirector(),
@@ -39,14 +39,24 @@ class AppRoot extends StatelessWidget {
           '/register': (context) => const RegisterScreen(),
           '/forgot_password': (context) => const ForgotPasswordScreen(),
           '/reset_password': (context) => const ResetPasswordScreen(),
-          '/dashboard': (context) => const DashboardScreen(),
+          '/home': (context) => const MainNavigationScreen(),
+
+          /// ⚠️ ATENÇÃO: `friendId` aqui precisa ser o `userId` da tabela `users`, e não o `requestId` da tabela `friends`.
+          '/chat': (context) {
+            final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
+            return ChatScreen(
+              friendId: args['friendId'] as String,     // 👈 deve ser o ID real do usuário com quem está conversando
+              friendName: args['friendName'] as String,
+              wsEndpoint: args['wsEndpoint'] as String,
+            );
+          },
         },
       ),
     );
   }
 }
 
-/// Widget responsável por redirecionar o usuário para a tela correta com base no estado de autenticação.
+/// Redireciona com base na autenticação do usuário.
 class _RootRedirector extends StatelessWidget {
   const _RootRedirector({Key? key}) : super(key: key);
 
@@ -54,18 +64,18 @@ class _RootRedirector extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<AuthProvider>(
       builder: (context, auth, _) {
-        // Exibe splash/loading enquanto verifica sessão
         if (auth.isAuthenticated == null) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
-        // Redireciona para dashboard se autenticado, senão para login
+
         WidgetsBinding.instance.addPostFrameCallback((_) {
           Navigator.of(context).pushReplacementNamed(
-            auth.isAuthenticated ? '/dashboard' : '/login',
+            auth.isAuthenticated ? '/home' : '/login',
           );
         });
+
         return const SizedBox.shrink();
       },
     );
