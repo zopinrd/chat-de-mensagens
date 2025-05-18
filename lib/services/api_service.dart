@@ -5,6 +5,7 @@ import 'dart:convert';
 import '../models/SearchedUser_model.dart';
 import '../models/friend_request_model.dart';
 import '../models/listFriend_model.dart';
+import '../models/chat_message_model.dart';
 import 'auth_service.dart';
 import 'api_exception.dart';
 
@@ -321,6 +322,41 @@ class ApiService {
     } catch (e) {
       print('[ApiService] Erro inesperado em fetchFriendRequests: $e');
       throw ApiException('Erro desconhecido ao buscar solicitações de amizade.');
+    }
+  }
+
+  /// Busca o histórico de mensagens com um amigo específico.
+  /// GET /messages?friendId=<id>
+  /// Retorna uma lista de ChatMessageModel ordenada por timestamp.
+  Future<List<ChatMessageModel>> getMessages(String friendId) async {
+    try {
+      final response = await _dio.get('/messages', queryParameters: {'friendId': friendId});
+      debugPrint('[ApiService] [getMessages] status: [34m${response.statusCode}[0m, data: ${response.data}');
+      if (response.statusCode == 200 && response.data is List) {
+        final List rawList = response.data;
+        final messages = rawList.map((item) {
+          try {
+            return ChatMessageModel.fromJson(item as Map<String, dynamic>);
+          } catch (e) {
+            debugPrint('[ApiService] Erro ao converter mensagem: $e');
+            return null;
+          }
+        }).whereType<ChatMessageModel>().toList();
+        messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+        debugPrint('[ApiService] [getMessages] Mensagens parseadas: ${messages.length}');
+        return messages;
+      } else if (response.statusCode == 401) {
+        throw ApiException('Sessão expirada. Faça login novamente.', statusCode: 401);
+      } else {
+        throw ApiException('Erro inesperado ao buscar mensagens.', statusCode: response.statusCode);
+      }
+    } on DioException catch (e) {
+      debugPrint('[ApiService] Erro Dio /messages: ${e.message}');
+      throw ApiException(e.message ?? 'Erro de rede ao buscar mensagens.');
+    } catch (e, stack) {
+      debugPrint('[ApiService] Erro inesperado /messages: $e');
+      debugPrint('$stack');
+      throw ApiException('Erro desconhecido ao buscar mensagens.');
     }
   }
 }

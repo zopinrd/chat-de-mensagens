@@ -6,6 +6,7 @@ import 'friend_provider.dart';
 import 'friend_request_provider.dart';
 import 'listFriends_provider.dart';
 import 'websocket_provider.dart';
+import 'chat_messages_provider.dart';
 
 /// Widget que inicializa e provê todos os providers globais do app.
 /// Adicione novos providers neste MultiProvider conforme o app crescer.
@@ -35,6 +36,10 @@ Widget AppProviders({required Widget child}) {
       /// Provider responsável pela comunicação WebSocket e mensagens em tempo real.
       ChangeNotifierProvider<WebSocketProvider>(
         create: (_) => WebSocketProvider(const String.fromEnvironment('WS_ENDPOINT', defaultValue: 'wss://98x3s1bqgc.execute-api.sa-east-1.amazonaws.com/production')),
+      ),
+      /// Provider responsável pelo histórico de mensagens do chat.
+      ChangeNotifierProvider<ChatMessagesProvider>(
+        create: (_) => ChatMessagesProvider(),
       ),
       // Adicione outros providers globais aqui conforme necessário.
     ],
